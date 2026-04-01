@@ -42,7 +42,7 @@ CLASS zcl_pdf_utils IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD string_to_xstring.
-    DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'UTF-8' ).
+    DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'ISO-8859-1' ).
     lo_conv->write( data = iv_text ).
     rv_raw = lo_conv->get_buffer( ).
   ENDMETHOD.
