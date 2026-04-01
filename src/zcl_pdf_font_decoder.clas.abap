@@ -45,7 +45,15 @@ CLASS zcl_pdf_font_decoder IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD decode_text_operand.
-    IF iv_pdf_string CP '<*>' AND iv_pdf_string NP '(*'.
+    DATA(lv_len) = strlen( iv_pdf_string ).
+    DATA lv_last_idx TYPE i VALUE 0.
+    IF lv_len >= 2.
+      lv_last_idx = lv_len - 1.
+    ENDIF.
+
+    IF lv_len >= 2
+      AND iv_pdf_string+0(1) = '<'
+      AND iv_pdf_string+lv_last_idx(1) = '>'.
       rv_text = decode_hex_string( iv_pdf_string ).
     ELSE.
       rv_text = decode_literal_string( iv_pdf_string ).
@@ -58,7 +66,8 @@ CLASS zcl_pdf_font_decoder IMPLEMENTATION.
 
     DATA lv_mapped TYPE string.
     DO strlen( rv_text ) TIMES.
-      DATA(lv_char) = rv_text+sy-index-1(1).
+      DATA(lv_offset) = sy-index - 1.
+      DATA(lv_char) = rv_text+lv_offset(1).
       READ TABLE ls_font_map-map WITH KEY src = lv_char INTO DATA(ls_map).
       IF sy-subrc = 0.
         lv_mapped = lv_mapped && ls_map-dst.
@@ -102,7 +111,7 @@ CLASS zcl_pdf_font_decoder IMPLEMENTATION.
           rv_text = rv_text && cl_abap_char_utilities=>newline.
           lv_idx = lv_idx + 2.
         WHEN 'r'.
-          rv_text = rv_text && cl_abap_char_utilities=>cr_lf.
+          rv_text = rv_text && cl_abap_char_utilities=>cr_lf+0(1).
           lv_idx = lv_idx + 2.
         WHEN 't'.
           rv_text = rv_text && cl_abap_char_utilities=>horizontal_tab.
@@ -132,7 +141,13 @@ CLASS zcl_pdf_font_decoder IMPLEMENTATION.
             DATA lv_code TYPE i.
             DATA lv_byte TYPE x LENGTH 1.
             DATA lv_byte_x TYPE xstring.
-            lv_code = lv_oct.
+            lv_code = 0.
+            DO strlen( lv_oct ) TIMES.
+              DATA(lv_oct_offset) = sy-index - 1.
+              DATA(lv_digit_char) = lv_oct+lv_oct_offset(1).
+              DATA(lv_digit) = CONV i( lv_digit_char ).
+              lv_code = lv_code * 8 + lv_digit.
+            ENDDO.
             lv_byte = lv_code.
             lv_byte_x = lv_byte.
             rv_text = rv_text && zcl_pdf_utils=>xstring_to_string( lv_byte_x ).
