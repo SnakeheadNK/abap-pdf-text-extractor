@@ -98,7 +98,10 @@ CLASS zcl_pdf_parser IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    DATA(lv_dict_raw) = lv_text+lv_dict_start(lv_dict_end-lv_dict_start+2).
+    DATA lv_dict_len TYPE i.
+    DATA lv_dict_raw TYPE string.
+    lv_dict_len = lv_dict_end - lv_dict_start + 2.
+    lv_dict_raw = lv_text+lv_dict_start(lv_dict_len).
     DATA(lo_trailer_obj) = NEW zcl_pdf_object( iv_id = 0 iv_generation = 0 iv_raw = lv_dict_raw ).
     mt_trailer = lo_trailer_obj->get_dictionary( ).
   ENDMETHOD.
@@ -122,8 +125,17 @@ CLASS zcl_pdf_parser IMPLEMENTATION.
       ENDIF.
       lv_endobj_pos = lv_endobj_pos + lv_obj_pos.
 
-      DATA(lv_raw_obj) = mv_pdf_text+lv_obj_pos(lv_endobj_pos-lv_obj_pos).
-      APPEND NEW zcl_pdf_object( iv_id = lv_id_s iv_generation = lv_gen_s iv_raw = lv_raw_obj ) TO mt_objects.
+      DATA lv_raw_obj_len TYPE i.
+      DATA lv_raw_obj TYPE string.
+      DATA lv_raw_obj_binary TYPE xstring.
+      lv_raw_obj_len = lv_endobj_pos - lv_obj_pos.
+      lv_raw_obj = mv_pdf_text+lv_obj_pos(lv_raw_obj_len).
+      lv_raw_obj_binary = mv_pdf_raw+lv_obj_pos(lv_raw_obj_len).
+      APPEND NEW zcl_pdf_object(
+        iv_id = lv_id_s
+        iv_generation = lv_gen_s
+        iv_raw = lv_raw_obj
+        iv_raw_binary = lv_raw_obj_binary ) TO mt_objects.
 
       lv_pos = lv_endobj_pos + 6.
     ENDWHILE.

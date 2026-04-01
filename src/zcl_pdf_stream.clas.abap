@@ -4,17 +4,19 @@ CLASS zcl_pdf_stream DEFINITION
   CREATE PUBLIC.
 
   PUBLIC SECTION.
+    TYPES tt_string TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+
     METHODS constructor
       IMPORTING
         iv_raw_stream TYPE xstring
-        it_filters    TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+        it_filters    TYPE tt_string.
 
     METHODS get_raw_stream RETURNING VALUE(rv_raw_stream) TYPE xstring.
-    METHODS get_filters RETURNING VALUE(rt_filters) TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+    METHODS get_filters RETURNING VALUE(rt_filters) TYPE tt_string.
 
   PRIVATE SECTION.
     DATA mv_raw_stream TYPE xstring.
-    DATA mt_filters TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+    DATA mt_filters TYPE tt_string.
 ENDCLASS.
 
 CLASS zcl_pdf_stream IMPLEMENTATION.

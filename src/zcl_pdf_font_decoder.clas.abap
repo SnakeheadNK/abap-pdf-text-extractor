@@ -93,7 +93,10 @@ CLASS zcl_pdf_font_decoder IMPLEMENTATION.
         EXIT.
       ENDIF.
 
-      DATA(lv_esc) = lv_input+lv_idx+1(1).
+      DATA lv_esc_off TYPE i.
+      DATA lv_esc TYPE string.
+      lv_esc_off = lv_idx + 1.
+      lv_esc = lv_input+lv_esc_off(1).
       CASE lv_esc.
         WHEN 'n'.
           rv_text = rv_text && cl_abap_char_utilities=>newline.
@@ -113,12 +116,20 @@ CLASS zcl_pdf_font_decoder IMPLEMENTATION.
           IF lv_esc CO '01234567'.
             DATA(lv_oct) = lv_esc.
             DATA(lv_take) = 1.
-            WHILE lv_take < 3 AND lv_idx + 1 + lv_take < lv_len AND lv_input+lv_idx+1+lv_take(1) CO '01234567'.
-              lv_oct = lv_oct && lv_input+lv_idx+1+lv_take(1).
-              lv_take = lv_take + 1.
+            WHILE lv_take < 3 AND lv_idx + 1 + lv_take < lv_len.
+              DATA lv_oct_off TYPE i.
+              DATA lv_oct_char TYPE string.
+              lv_oct_off = lv_idx + 1 + lv_take.
+              lv_oct_char = lv_input+lv_oct_off(1).
+              IF lv_oct_char CO '01234567'.
+                lv_oct = lv_oct && lv_oct_char.
+                lv_take = lv_take + 1.
+              ELSE.
+                EXIT.
+              ENDIF.
             ENDWHILE.
 
-            DATA(lv_code) TYPE i.
+            DATA lv_code TYPE i.
             DATA lv_byte TYPE x LENGTH 1.
             DATA lv_byte_x TYPE xstring.
             lv_code = lv_oct.

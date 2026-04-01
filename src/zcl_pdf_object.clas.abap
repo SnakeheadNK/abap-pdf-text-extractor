@@ -8,29 +8,32 @@ CLASS zcl_pdf_object DEFINITION
              key   TYPE string,
              value TYPE string,
            END OF ty_dict_item,
-           tt_dict_item TYPE HASHED TABLE OF ty_dict_item WITH UNIQUE KEY key.
+           tt_dict_item TYPE HASHED TABLE OF ty_dict_item WITH UNIQUE KEY key,
+           tt_string TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
 
     METHODS constructor
       IMPORTING
         iv_id         TYPE i
         iv_generation TYPE i
-        iv_raw        TYPE string.
+        iv_raw        TYPE string
+        iv_raw_binary TYPE xstring OPTIONAL.
 
     METHODS get_id RETURNING VALUE(rv_id) TYPE i.
     METHODS get_generation RETURNING VALUE(rv_generation) TYPE i.
     METHODS get_raw_content RETURNING VALUE(rv_raw) TYPE string.
     METHODS get_dictionary RETURNING VALUE(rt_dict) TYPE tt_dict_item.
     METHODS get_stream RETURNING VALUE(rv_stream) TYPE xstring.
-    METHODS get_filters RETURNING VALUE(rt_filters) TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+    METHODS get_filters RETURNING VALUE(rt_filters) TYPE tt_string.
     METHODS has_stream RETURNING VALUE(rv_has_stream) TYPE abap_bool.
 
   PRIVATE SECTION.
     DATA mv_id TYPE i.
     DATA mv_generation TYPE i.
     DATA mv_raw TYPE string.
+    DATA mv_raw_binary TYPE xstring.
     DATA mt_dict TYPE tt_dict_item.
     DATA mv_stream_raw TYPE xstring.
-    DATA mt_filters TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+    DATA mt_filters TYPE tt_string.
 
     METHODS parse_dictionary.
     METHODS parse_stream.
@@ -41,6 +44,7 @@ CLASS zcl_pdf_object IMPLEMENTATION.
     mv_id = iv_id.
     mv_generation = iv_generation.
     mv_raw = iv_raw.
+    mv_raw_binary = iv_raw_binary.
     parse_dictionary( ).
     parse_stream( ).
   ENDMETHOD.
@@ -56,11 +60,15 @@ CLASS zcl_pdf_object IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    lv_dict_text = mv_raw+lv_begin+2(lv_end-lv_begin-2).
+    DATA lv_dict_off TYPE i.
+    DATA lv_dict_len TYPE i.
+    lv_dict_off = lv_begin + 2.
+    lv_dict_len = lv_end - lv_begin - 2.
+    lv_dict_text = mv_raw+lv_dict_off(lv_dict_len).
     REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>newline IN lv_dict_text WITH space.
     CONDENSE lv_dict_text.
 
-    DATA lt_tokens TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+    DATA lt_tokens TYPE tt_string.
     SPLIT lv_dict_text AT space INTO TABLE lt_tokens.
 
     DATA lv_key TYPE string.
@@ -68,7 +76,29 @@ CLASS zcl_pdf_object IMPLEMENTATION.
       IF lv_key IS NOT INITIAL.
         INSERT VALUE ty_dict_item( key = lv_key value = lv_token ) INTO TABLE mt_dict.
         IF lv_key = '/Filter'.
-          APPEND lv_token TO mt_filters.
+          DATA(lv_filter_value) = lv_token.
+          IF lv_filter_value = '['.
+            CLEAR lv_filter_value.
+            DATA(lv_filter_index) = sy-tabix + 1.
+            LOOP AT lt_tokens INTO DATA(lv_filter_token) FROM lv_filter_index.
+              IF lv_filter_token = ']'.
+                EXIT.
+              ENDIF.
+              IF lv_filter_token CP '/*'.
+                IF lv_filter_value IS INITIAL.
+                  lv_filter_value = lv_filter_token.
+                ELSE.
+                  lv_filter_value = |{ lv_filter_value } { lv_filter_token }|.
+                ENDIF.
+                APPEND lv_filter_token TO mt_filters.
+              ENDIF.
+            ENDLOOP.
+          ELSEIF lv_filter_value CP '/*'.
+            APPEND lv_filter_value TO mt_filters.
+          ENDIF.
+          INSERT VALUE ty_dict_item( key = lv_key value = lv_filter_value ) INTO TABLE mt_dict.
+        ELSE.
+          INSERT VALUE ty_dict_item( key = lv_key value = lv_token ) INTO TABLE mt_dict.
         ENDIF.
         CLEAR lv_key.
       ELSEIF lv_token CP '/*'.

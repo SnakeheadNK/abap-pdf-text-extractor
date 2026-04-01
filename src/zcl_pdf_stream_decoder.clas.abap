@@ -4,10 +4,12 @@ CLASS zcl_pdf_stream_decoder DEFINITION
   CREATE PUBLIC.
 
   PUBLIC SECTION.
+    TYPES tt_string TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+
     METHODS decode
       IMPORTING
         iv_stream  TYPE xstring
-        it_filters TYPE STANDARD TABLE OF string WITH EMPTY KEY
+        it_filters TYPE tt_string
       RETURNING
         VALUE(rv_decoded) TYPE xstring
       RAISING
