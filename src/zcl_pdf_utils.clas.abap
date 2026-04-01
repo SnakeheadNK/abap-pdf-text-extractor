@@ -10,6 +10,12 @@ CLASS zcl_pdf_utils DEFINITION
       RETURNING
         VALUE(rv_text) TYPE string.
 
+    CLASS-METHODS xstring_to_latin1_string
+      IMPORTING
+        iv_raw TYPE xstring
+      RETURNING
+        VALUE(rv_text) TYPE string.
+
     CLASS-METHODS string_to_xstring
       IMPORTING
         iv_text TYPE string
@@ -27,6 +33,11 @@ ENDCLASS.
 CLASS zcl_pdf_utils IMPLEMENTATION.
   METHOD xstring_to_string.
     DATA(lo_conv) = cl_abap_conv_in_ce=>create( input = iv_raw encoding = 'UTF-8' ignore_cerr = abap_true ).
+    lo_conv->read( IMPORTING data = rv_text ).
+  ENDMETHOD.
+
+  METHOD xstring_to_latin1_string.
+    DATA(lo_conv) = cl_abap_conv_in_ce=>create( input = iv_raw encoding = 'ISO-8859-1' ignore_cerr = abap_false ).
     lo_conv->read( IMPORTING data = rv_text ).
   ENDMETHOD.
 

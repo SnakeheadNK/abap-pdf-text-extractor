@@ -7,7 +7,7 @@ CLASS zcl_pdf_reader DEFINITION
     " Loads a PDF file from the SAP GUI frontend into raw binary form.
     METHODS load_from_frontend
       IMPORTING
-        iv_filename TYPE string
+        iv_filename TYPE string OPTIONAL
       RAISING
         zcx_pdf_error.
 
@@ -44,12 +44,48 @@ CLASS zcl_pdf_reader IMPLEMENTATION.
   METHOD load_from_frontend.
     DATA lt_binary     TYPE solix_tab.
     DATA lv_filelength TYPE i.
+    DATA lv_filename   TYPE string.
 
     CLEAR mv_pdf_raw.
 
+    lv_filename = iv_filename.
+    IF lv_filename IS INITIAL.
+      DATA lt_filetable TYPE filetable.
+      DATA lv_rc TYPE i.
+
+      cl_gui_frontend_services=>file_open_dialog(
+        EXPORTING
+          multiselection = abap_false
+          file_filter    = 'PDF (*.pdf)|*.pdf|'
+        CHANGING
+          file_table     = lt_filetable
+          rc             = lv_rc
+        EXCEPTIONS
+          file_open_dialog_failed = 1
+          cntl_error              = 2
+          error_no_gui            = 3
+          not_supported_by_gui    = 4
+          OTHERS                  = 5 ).
+
+      IF sy-subrc <> 0 OR lv_rc <= 0.
+        RAISE EXCEPTION TYPE zcx_pdf_error
+          EXPORTING
+            iv_message = |File selection dialog was canceled or failed (subrc={ sy-subrc }).|.
+      ENDIF.
+
+      READ TABLE lt_filetable INDEX 1 INTO DATA(ls_file).
+      IF sy-subrc <> 0 OR ls_file-filename IS INITIAL.
+        RAISE EXCEPTION TYPE zcx_pdf_error
+          EXPORTING
+            iv_message = 'No file selected in frontend dialog.'.
+      ENDIF.
+
+      lv_filename = ls_file-filename.
+    ENDIF.
+
     cl_gui_frontend_services=>gui_upload(
       EXPORTING
-        filename                = iv_filename
+        filename                = lv_filename
         filetype                = 'BIN'
       IMPORTING
         filelength              = lv_filelength
@@ -79,7 +115,7 @@ CLASS zcl_pdf_reader IMPLEMENTATION.
     IF sy-subrc <> 0.
       RAISE EXCEPTION TYPE zcx_pdf_error
         EXPORTING
-          iv_message = |Failed to load frontend file "{ iv_filename }" (subrc={ sy-subrc }).|.
+          iv_message = |Failed to load frontend file "{ lv_filename }" (subrc={ sy-subrc }).|.
     ENDIF.
 
     CALL FUNCTION 'SCMS_BINARY_TO_XSTRING'

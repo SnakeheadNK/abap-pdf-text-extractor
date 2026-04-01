@@ -4,6 +4,8 @@ CLASS zcl_pdf_xref DEFINITION
   CREATE PUBLIC.
 
   PUBLIC SECTION.
+    TYPES tt_string TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+
     TYPES: BEGIN OF ty_entry,
              obj_id     TYPE i,
              offset     TYPE i,
@@ -39,7 +41,7 @@ ENDCLASS.
 
 CLASS zcl_pdf_xref IMPLEMENTATION.
   METHOD read_xref_table.
-    DATA lt_lines TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+    DATA lt_lines TYPE tt_string.
     DATA lv_line TYPE string.
     DATA lv_index TYPE i.
     DATA lv_subsection_start TYPE i.
@@ -64,9 +66,10 @@ CLASS zcl_pdf_xref IMPLEMENTATION.
         EXIT.
       ENDIF.
 
-      CONDENSE lv_line.
-      SPLIT lv_line AT space INTO DATA(lv_start_s) DATA(lv_count_s).
-      IF lv_start_s IS INITIAL OR lv_count_s IS INITIAL.
+      DATA lv_start_s TYPE string.
+      DATA lv_count_s TYPE string.
+      FIND FIRST OCCURRENCE OF REGEX '^([0-9]+)[[:space:]]+([0-9]+)$' IN lv_line SUBMATCHES lv_start_s lv_count_s.
+      IF sy-subrc <> 0.
         lv_index = lv_index + 1.
         CONTINUE.
       ENDIF.
@@ -81,11 +84,14 @@ CLASS zcl_pdf_xref IMPLEMENTATION.
           EXIT.
         ENDIF.
 
-        DATA(lv_offset_s) = lv_line+0(10).
-        DATA(lv_gen_s) = lv_line+11(5).
-        DATA(lv_flag) = lv_line+17(1).
-        CONDENSE lv_offset_s.
-        CONDENSE lv_gen_s.
+        DATA lv_offset_s TYPE string.
+        DATA lv_gen_s TYPE string.
+        DATA lv_flag TYPE string.
+        FIND FIRST OCCURRENCE OF REGEX '^([0-9]{10})[[:space:]]+([0-9]{5})[[:space:]]+([nf])' IN lv_line SUBMATCHES lv_offset_s lv_gen_s lv_flag.
+        IF sy-subrc <> 0.
+          lv_index = lv_index + 1.
+          CONTINUE.
+        ENDIF.
 
         lv_obj = lv_subsection_start + sy-index - 1.
         INSERT VALUE ty_entry(

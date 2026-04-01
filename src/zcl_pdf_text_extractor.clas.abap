@@ -4,6 +4,8 @@ CLASS zcl_pdf_text_extractor DEFINITION
   CREATE PUBLIC.
 
   PUBLIC SECTION.
+    TYPES tt_string TYPE STANDARD TABLE OF string WITH DEFAULT KEY.
+
     METHODS extract_text
       IMPORTING
         iv_content_stream TYPE xstring
@@ -30,7 +32,7 @@ ENDCLASS.
 CLASS zcl_pdf_text_extractor IMPLEMENTATION.
   METHOD extract_text.
     DATA(lv_content) = zcl_pdf_utils=>xstring_to_string( iv_content_stream ).
-    DATA lt_lines TYPE STANDARD TABLE OF string WITH EMPTY KEY.
+    DATA lt_lines TYPE tt_string.
     DATA lv_in_text_block TYPE abap_bool VALUE abap_false.
     DATA lv_current_font TYPE string VALUE 'DEFAULT'.
 
@@ -68,67 +70,26 @@ CLASS zcl_pdf_text_extractor IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD extract_text_operands.
-    DATA lv_offset TYPE i VALUE 0.
-    DATA lv_len TYPE i.
+    DATA lt_matches TYPE match_result_tab.
 
-    lv_len = strlen( iv_line ).
-    WHILE lv_offset < lv_len.
-      FIND FIRST OCCURRENCE OF '(' IN SECTION OFFSET lv_offset OF iv_line MATCH OFFSET DATA(lv_pos_paren).
-      DATA(lv_has_paren) = xsdbool( sy-subrc = 0 ).
-      FIND FIRST OCCURRENCE OF '<' IN SECTION OFFSET lv_offset OF iv_line MATCH OFFSET DATA(lv_pos_hex).
-      DATA(lv_has_hex) = xsdbool( sy-subrc = 0 ).
+    FIND ALL OCCURRENCES OF REGEX '\([^\)]*\)|<[0-9A-Fa-f[:space:]]+>' IN iv_line RESULTS lt_matches.
 
-      IF lv_has_paren = abap_false AND lv_has_hex = abap_false.
-        EXIT.
+    LOOP AT lt_matches INTO DATA(ls_match).
+      IF ls_match-length <= 0.
+        CONTINUE.
       ENDIF.
 
-      DATA(lv_start) TYPE i.
-      DATA(lv_is_hex) TYPE abap_bool VALUE abap_false.
-      IF lv_has_paren = abap_true AND ( lv_has_hex = abap_false OR lv_pos_paren <= lv_pos_hex ).
-        lv_start = lv_pos_paren + lv_offset.
-      ELSE.
-        lv_start = lv_pos_hex + lv_offset.
-        lv_is_hex = abap_true.
-      ENDIF.
-
-      DATA lv_end_rel TYPE i.
-      IF lv_is_hex = abap_true.
-        FIND FIRST OCCURRENCE OF '>' IN SECTION OFFSET ( lv_start + 1 ) OF iv_line MATCH OFFSET lv_end_rel.
-      ELSE.
-        FIND FIRST OCCURRENCE OF ')' IN SECTION OFFSET ( lv_start + 1 ) OF iv_line MATCH OFFSET lv_end_rel.
-      ENDIF.
-      IF sy-subrc <> 0.
-        EXIT.
-      ENDIF.
-
-      DATA(lv_end) = lv_end_rel + lv_start + 1.
-      DATA(lv_literal) = iv_line+lv_start(lv_end-lv_start+1).
+      DATA lv_literal TYPE string.
+      lv_literal = iv_line+ls_match-offset(ls_match-length).
 
       rv_text = rv_text && io_font_decoder->decode_text_operand(
         iv_pdf_string = lv_literal
         iv_font_name  = iv_font_name ).
-
-      lv_offset = lv_end + 1.
-    ENDWHILE.
+    ENDLOOP.
   ENDMETHOD.
 
   METHOD extract_font_from_tf.
-    DATA lt_parts TYPE STANDARD TABLE OF string WITH EMPTY KEY.
-    DATA lv_prev TYPE string.
-
-    SPLIT iv_line AT space INTO TABLE lt_parts.
-    LOOP AT lt_parts INTO DATA(lv_token).
-      IF lv_token = 'Tf'.
-        rv_font_name = lv_prev.
-        IF rv_font_name CS '/'.
-          SHIFT rv_font_name LEFT DELETING LEADING '/'.
-        ENDIF.
-        RETURN.
-      ENDIF.
-      IF lv_token IS NOT INITIAL.
-        lv_prev = lv_token.
-      ENDIF.
-    ENDLOOP.
+    FIND FIRST OCCURRENCE OF REGEX '/([^ ]+) +[0-9\.]+ +Tf' IN iv_line SUBMATCHES rv_font_name.
   ENDMETHOD.
 ENDCLASS.
 
