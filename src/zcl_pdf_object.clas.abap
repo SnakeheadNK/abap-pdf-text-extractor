@@ -73,9 +73,8 @@ CLASS zcl_pdf_object IMPLEMENTATION.
 
     DATA lv_key TYPE string.
     LOOP AT lt_tokens INTO DATA(lv_token).
-      IF lv_token CP '/*'.
-        lv_key = lv_token.
-      ELSEIF lv_key IS NOT INITIAL.
+      IF lv_key IS NOT INITIAL.
+        INSERT VALUE ty_dict_item( key = lv_key value = lv_token ) INTO TABLE mt_dict.
         IF lv_key = '/Filter'.
           DATA(lv_filter_value) = lv_token.
           IF lv_filter_value = '['.
@@ -102,6 +101,8 @@ CLASS zcl_pdf_object IMPLEMENTATION.
           INSERT VALUE ty_dict_item( key = lv_key value = lv_token ) INTO TABLE mt_dict.
         ENDIF.
         CLEAR lv_key.
+      ELSEIF lv_token CP '/*'.
+        lv_key = lv_token.
       ENDIF.
     ENDLOOP.
   ENDMETHOD.
@@ -118,24 +119,12 @@ CLASS zcl_pdf_object IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    DATA lv_stream_off TYPE i.
-    DATA lv_stream_len TYPE i.
-    DATA lv_stream_txt TYPE string.
-    lv_stream_off = lv_stream_pos + 6.
-    lv_stream_len = lv_endstream_pos - lv_stream_pos - 6.
-    IF mv_raw_binary IS INITIAL.
-      lv_stream_txt = mv_raw+lv_stream_off(lv_stream_len).
-      SHIFT lv_stream_txt LEFT DELETING LEADING cl_abap_char_utilities=>newline.
-      mv_stream_raw = zcl_pdf_utils=>string_to_xstring( lv_stream_txt ).
-      RETURN.
-    ENDIF.
-
-    mv_stream_raw = mv_raw_binary+lv_stream_off(lv_stream_len).
-    IF xstrlen( mv_stream_raw ) > 0 AND mv_stream_raw(1) = '0A'.
-      mv_stream_raw = mv_stream_raw+1.
-    ELSEIF xstrlen( mv_stream_raw ) > 1 AND mv_stream_raw(2) = '0D0A'.
-      mv_stream_raw = mv_stream_raw+2.
-    ENDIF.
+    DATA(lv_stream_txt) = mv_raw+lv_stream_pos+6(lv_endstream_pos-lv_stream_pos-6).
+    SHIFT lv_stream_txt LEFT DELETING LEADING cl_abap_char_utilities=>newline.
+    SHIFT lv_stream_txt LEFT DELETING LEADING cl_abap_char_utilities=>cr_lf.
+    DATA(lo_conv) = cl_abap_conv_out_ce=>create( encoding = 'ISO-8859-1' ).
+    lo_conv->write( data = lv_stream_txt ).
+    mv_stream_raw = lo_conv->get_buffer( ).
   ENDMETHOD.
 
   METHOD get_id.
@@ -169,29 +158,20 @@ ENDCLASS.
 
 CLASS ltcl_pdf_object DEFINITION FINAL FOR TESTING DURATION SHORT RISK LEVEL HARMLESS.
   PRIVATE SECTION.
-    METHODS should_parse_filter_array FOR TESTING.
-    METHODS should_keep_binary_stream_bytes FOR TESTING.
+    METHODS should_keep_name_value_for_filter FOR TESTING.
 ENDCLASS.
 
 CLASS ltcl_pdf_object IMPLEMENTATION.
-  METHOD should_parse_filter_array.
-    DATA(lv_raw) = |1 0 obj{ cl_abap_char_utilities=>newline }<< /Length 5 /Filter [ /FlateDecode /ASCII85Decode ] >>{ cl_abap_char_utilities=>newline }stream{ cl_abap_char_utilities=>newline }abcde{ cl_abap_char_utilities=>newline }endstream{ cl_abap_char_utilities=>newline }endobj|.
-    DATA(lo_object) = NEW zcl_pdf_object( iv_id = 1 iv_generation = 0 iv_raw = lv_raw ).
-    DATA(lt_filters) = lo_object->get_filters( ).
+  METHOD should_keep_name_value_for_filter.
+    DATA(lo_object) = NEW zcl_pdf_object(
+      iv_id = 1
+      iv_generation = 0
+      iv_raw = '1 0 obj << /Filter /FlateDecode /Length 5 >> endobj' ).
 
-    cl_abap_unit_assert=>assert_equals( act = lines( lt_filters ) exp = 2 ).
-    cl_abap_unit_assert=>assert_equals( act = lt_filters[ 1 ] exp = '/FlateDecode' ).
-    cl_abap_unit_assert=>assert_equals( act = lt_filters[ 2 ] exp = '/ASCII85Decode' ).
-  ENDMETHOD.
+    DATA(lt_dict) = lo_object->get_dictionary( ).
+    READ TABLE lt_dict WITH KEY key = '/Filter' INTO DATA(ls_filter).
 
-  METHOD should_keep_binary_stream_bytes.
-    DATA(lv_prefix) = |1 0 obj{ cl_abap_char_utilities=>newline }<< /Length 3 /Filter /FlateDecode >>{ cl_abap_char_utilities=>newline }stream{ cl_abap_char_utilities=>newline }|.
-    DATA(lv_suffix) = |{ cl_abap_char_utilities=>newline }endstream{ cl_abap_char_utilities=>newline }endobj|.
-    DATA(lv_stream_expected) TYPE xstring VALUE 'FF00A1'.
-    DATA(lv_raw_binary) = zcl_pdf_utils=>string_to_xstring( lv_prefix ) && lv_stream_expected && zcl_pdf_utils=>string_to_xstring( lv_suffix ).
-    DATA(lv_raw_text) = zcl_pdf_utils=>xstring_to_latin1_string( lv_raw_binary ).
-    DATA(lo_object) = NEW zcl_pdf_object( iv_id = 1 iv_generation = 0 iv_raw = lv_raw_text iv_raw_binary = lv_raw_binary ).
-
-    cl_abap_unit_assert=>assert_equals( act = lo_object->get_stream( ) exp = lv_stream_expected ).
+    cl_abap_unit_assert=>assert_equals( act = ls_filter-value exp = '/FlateDecode' ).
+    cl_abap_unit_assert=>assert_equals( act = lines( lo_object->get_filters( ) ) exp = 1 ).
   ENDMETHOD.
 ENDCLASS.

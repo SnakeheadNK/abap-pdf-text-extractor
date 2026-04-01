@@ -53,7 +53,8 @@ ENDCLASS.
 CLASS zcl_pdf_parser IMPLEMENTATION.
   METHOD parse.
     mv_pdf_raw = iv_pdf_raw.
-    mv_pdf_text = zcl_pdf_utils=>xstring_to_latin1_string( iv_pdf_raw ).
+    DATA(lo_conv) = cl_abap_conv_in_ce=>create( input = iv_pdf_raw encoding = 'ISO-8859-1' ignore_cerr = abap_false ).
+    lo_conv->read( IMPORTING data = mv_pdf_text ).
 
     IF mv_pdf_text NP '%PDF-*'.
       RAISE EXCEPTION TYPE zcx_pdf_error
